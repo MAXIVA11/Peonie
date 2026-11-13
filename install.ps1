@@ -1,8 +1,8 @@
 # Peonie installer (Windows / PowerShell)
 #   irm https://raw.githubusercontent.com/MAXIVA11/Peonie/main/install.ps1 | iex
 # or from a clone:
-#   .\install.ps1            # full install (launcher + models)
-#   .\install.ps1 models     # (re)build Peonie models only
+#   .\install.ps1            # full install (launcher + model)
+#   .\install.ps1 model      # (re)build the Peonie model only
 param([string]$Mode = "all")
 $ErrorActionPreference = "Stop"
 $Pink = "`e[38;5;211m"; $Dim = "`e[2m"; $Rst = "`e[0m"; $Grn = "`e[32m"; $Ylw = "`e[33m"
@@ -24,7 +24,7 @@ function Find-Ollama {
   return $null
 }
 
-if ($Mode -ne "models") {
+if ($Mode -ne "model") {
   # 1. Node check
   if (-not (Get-Command node -ErrorAction SilentlyContinue)) { Write-Host "${Ylw}Node.js 18+ is required. Install it, then re-run.${Rst}"; exit 1 }
 
@@ -51,22 +51,14 @@ if ($Mode -ne "models") {
   }
 }
 
-# 5. Build models
+# 5. Build the model
 $Ol = Find-Ollama
 if (-not $Ol) { Write-Host "${Ylw}Ollama not found; skipping model build.${Rst}"; exit 0 }
 # ensure server
 try { Invoke-WebRequest -UseBasicParsing http://localhost:11434/api/version -TimeoutSec 3 | Out-Null }
 catch { Start-Process $Ol -ArgumentList "serve" -WindowStyle Hidden; Start-Sleep 4 }
 
-$models = @(
-  @{ tag = "peonie-code";  file = "Modelfile.code" },
-  @{ tag = "peonie-cyber"; file = "Modelfile.cyber" },
-  @{ tag = "peonie-sec";   file = "Modelfile.sec" }
-)
-foreach ($m in $models) {
-  $mf = Join-Path $Root "models\$($m.file)"
-  Say "building $($m.tag) $Dim(pulls base on first run)$Rst"
-  & $Ol create $m.tag -f $mf
-  if ($LASTEXITCODE -ne 0) { Write-Host "${Ylw}  build of $($m.tag) failed (base pull may be incomplete) — re-run: .\install.ps1 models${Rst}" }
-}
+Say "building peonie ${Dim}(pulls the base on first run)${Rst}"
+& $Ol create peonie -f (Join-Path $Root "models\Modelfile")
+if ($LASTEXITCODE -ne 0) { Write-Host "${Ylw}  build failed (the base pull may be incomplete). Re-run: .\install.ps1 model${Rst}" }
 Write-Host "${Grn}Peonie is ready.  Try:  peonie doctor   then   peonie claude${Rst}"

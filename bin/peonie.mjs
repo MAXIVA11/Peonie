@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Peonie — the open-source cyber model.
-// Runs Claude Code / Codex / CAI against local, security-tuned open-weight
-// models served by Ollama. No tokens, no credits, no cloud.
+// Peonie - the open-source cyber model.
+// Runs Claude Code / Codex / CAI on a single local, security-tuned model
+// served by Ollama. No tokens, no credits, no cloud.
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -15,15 +15,11 @@ const ROOT = join(__dirname, '..');
 const IS_WIN = platform() === 'win32';
 const OLLAMA_HOST = process.env.PEONIE_OLLAMA_HOST || 'http://localhost:11434';
 
-// ---- Peonie model catalog ---------------------------------------------------
-// Each profile maps a short name -> the custom Ollama model `peonie setup` builds,
-// its upstream base, and the context window to advertise to the agent.
-const MODELS = {
-  code:  { tag: 'peonie-code',  base: 'qwen3-coder:30b',                                              ctx: 262144, blurb: 'Agentic driver (Qwen3-Coder 30B, strong tool-calling). Default.' },
-  cyber: { tag: 'peonie-cyber', base: 'hf.co/mradermacher/DeepHat-V1-7B-GGUF:Q4_K_M',                 ctx: 32768,  blurb: 'Security specialist (DeepHat V1 7B, offensive/defensive cyber).' },
-  sec:   { tag: 'peonie-sec',   base: 'hf.co/fdtn-ai/Foundation-Sec-8B-Reasoning-Q4_K_M-GGUF:latest', ctx: 16384,  blurb: 'Threat-intel reasoner (Cisco Foundation-Sec-8B).' },
-};
-const DEFAULT_PROFILE = 'code';
+// One unified model. Peonie is the cyber model; this is the only tag it serves.
+// Override the Ollama tag with PEONIE_MODEL if you build your own.
+const MODEL = process.env.PEONIE_MODEL || 'peonie';
+const MODEL_BASE = 'qwen3-coder:30b';
+const CTX = 32768;
 
 const C = {
   reset: '\x1b[0m', dim: '\x1b[2m', bold: '\x1b[1m',
@@ -40,10 +36,10 @@ const BANNER = `${C.pink}${C.bold}
    ██╔═══╝ ██╔══╝  ██║   ██║██║╚██╗██║██║██╔══╝
    ██║     ███████╗╚██████╔╝██║ ╚████║██║███████╗
    ╚═╝     ╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝╚══════╝${C.reset}
-   ${C.dim}the open-source cyber model · local · no tokens${C.reset}
+   ${C.dim}the open-source cyber model . local . no tokens${C.reset}
 `;
 
-// ---- small helpers ----------------------------------------------------------
+// ---- helpers ----------------------------------------------------------------
 function which(cmd) {
   const probe = IS_WIN ? 'where' : 'which';
   const r = spawnSync(probe, [cmd], { encoding: 'utf8' });
@@ -96,7 +92,7 @@ async function ensureServer() {
   if (await serverUp()) return;
   const ol = ollamaBin();
   if (!ol) die('Ollama is not installed. Install it first:\n  winget install Ollama.Ollama   (Windows)\n  curl -fsSL https://ollama.com/install.sh | sh   (Linux)');
-  log(paint('Starting Ollama…', C.dim));
+  log(paint('Starting Ollama...', C.dim));
   const child = spawn(ol, ['serve'], { detached: true, stdio: 'ignore' });
   child.unref();
   for (let i = 0; i < 30; i++) { await new Promise((r) => setTimeout(r, 500)); if (await serverUp()) return; }
@@ -109,22 +105,9 @@ async function listLocalModels() {
   try { return (JSON.parse(r.body).models || []).map((m) => m.name); } catch { return []; }
 }
 
-// Ollama reports names with a tag suffix (e.g. "peonie-code:latest").
-// Match either the bare name or the base before the ":".
+// Ollama reports names with a tag suffix (e.g. "peonie:latest").
 function hasModel(list, tag) {
   return list.some((n) => n === tag || n === tag + ':latest' || n.split(':')[0] === tag);
-}
-
-function resolveProfile(args) {
-  // --model <code|cyber|sec|rawOllamaName> ; also accept PEONIE_MODEL env
-  let name = process.env.PEONIE_MODEL || DEFAULT_PROFILE;
-  const i = args.findIndex((a) => a === '--model' || a === '-m');
-  let passthrough = args;
-  if (i !== -1 && args[i + 1]) { name = args[i + 1]; passthrough = args.slice(0, i).concat(args.slice(i + 2)); }
-  const prof = MODELS[name];
-  if (prof) return { tag: prof.tag, ctx: prof.ctx, passthrough };
-  // allow an arbitrary local ollama model name
-  return { tag: name, ctx: 32768, passthrough };
 }
 
 function run(bin, argv, extraEnv) {
@@ -133,63 +116,58 @@ function run(bin, argv, extraEnv) {
   child.on('error', (e) => die('failed to launch ' + bin + ': ' + e.message));
 }
 
+async function warnIfUnbuilt() {
+  const local = await listLocalModels();
+  if (!hasModel(local, MODEL)) log(paint(`Model "${MODEL}" is not built yet. Run:  peonie setup`, C.yellow));
+}
+
 // ---- commands ---------------------------------------------------------------
 async function cmdClaude(args) {
   const claude = claudeBin();
   if (!claude) die('Claude Code is not installed.\n  irm https://claude.ai/install.ps1 | iex   (Windows)\n  curl -fsSL https://claude.ai/install.sh | bash   (Linux/macOS)');
   await ensureServer();
-  const { tag, ctx, passthrough } = resolveProfile(args);
-  const local = await listLocalModels();
-  const isPeonieModel = Object.keys(MODELS).some((k) => MODELS[k].tag === tag);
-  if (!hasModel(local, tag) && isPeonieModel) {
-    log(paint(`Model "${tag}" is not built yet. Run:  peonie setup`, C.yellow));
-  }
+  await warnIfUnbuilt();
   const env = {
     ANTHROPIC_BASE_URL: OLLAMA_HOST,
     ANTHROPIC_AUTH_TOKEN: 'peonie',
     ANTHROPIC_API_KEY: '',
-    ANTHROPIC_MODEL: tag,
-    ANTHROPIC_DEFAULT_OPUS_MODEL: tag,
-    ANTHROPIC_DEFAULT_SONNET_MODEL: tag,
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: tag,
-    ANTHROPIC_SMALL_FAST_MODEL: tag,
-    CLAUDE_CODE_MAX_CONTEXT_TOKENS: String(ctx),
+    ANTHROPIC_MODEL: MODEL,
+    ANTHROPIC_DEFAULT_OPUS_MODEL: MODEL,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: MODEL,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: MODEL,
+    ANTHROPIC_SMALL_FAST_MODEL: MODEL,
+    CLAUDE_CODE_MAX_CONTEXT_TOKENS: String(CTX),
     CLAUDE_CODE_AUTO_MODE_SERVER: '0',
   };
-  log(paint(`Peonie → Claude Code  ·  model ${tag}  ·  ${OLLAMA_HOST}`, C.pink));
-  run(claude, passthrough, env);
+  log(paint(`Peonie on Claude Code . model ${MODEL} . ${OLLAMA_HOST}`, C.pink));
+  run(claude, args, env);
 }
 
 async function cmdCodex(args) {
   const codex = codexBin();
   if (!codex) die('Codex CLI is not installed.  npm i -g @openai/codex');
   await ensureServer();
-  const { tag, passthrough } = resolveProfile(args);
-  // Codex speaks OpenAI-compatible; Ollama exposes /v1
-  const env = {
-    OPENAI_BASE_URL: OLLAMA_HOST + '/v1',
-    OPENAI_API_KEY: 'peonie',
-  };
-  log(paint(`Peonie → Codex  ·  model ${tag}  ·  ${OLLAMA_HOST}/v1`, C.pink));
-  run(codex, ['--model', tag, ...passthrough], env);
+  await warnIfUnbuilt();
+  const env = { OPENAI_BASE_URL: OLLAMA_HOST + '/v1', OPENAI_API_KEY: 'peonie' };
+  log(paint(`Peonie on Codex . model ${MODEL} . ${OLLAMA_HOST}/v1`, C.pink));
+  run(codex, ['--model', MODEL, ...args], env);
 }
 
 async function cmdCai(args) {
   await ensureServer();
-  const { tag, passthrough } = resolveProfile(args);
-  const cai = findExe('cai', []);
+  await warnIfUnbuilt();
   const env = {
     OLLAMA_API_BASE: OLLAMA_HOST,
     OPENAI_BASE_URL: OLLAMA_HOST + '/v1',
     OPENAI_API_KEY: 'peonie',
-    CAI_MODEL: 'ollama/' + tag,
+    CAI_MODEL: 'ollama/' + MODEL,
   };
-  log(paint(`Peonie → CAI  ·  model ollama/${tag}`, C.pink));
-  if (cai) return run(cai, passthrough, env);
-  // fall back to module invocation
+  log(paint(`Peonie on CAI . model ollama/${MODEL}`, C.pink));
+  const cai = findExe('cai', []);
+  if (cai) return run(cai, args, env);
   const py = findExe('python', [findExe('py', [])]);
   if (!py) die('CAI is not installed.  pip install cai-framework');
-  run(py, ['-m', 'cai', ...passthrough], env);
+  run(py, ['-m', 'cai', ...args], env);
 }
 
 async function cmdScan(args) {
@@ -199,10 +177,10 @@ async function cmdScan(args) {
   const cvebin = findExe('cve-bin-tool', []);
   const syft = findExe('syft', []);
   let ran = false;
-  if (cvebin) { ran = true; log(paint('• cve-bin-tool', C.cyan)); spawnSync(cvebin, [target], { stdio: 'inherit' }); }
-  if (trivy) { ran = true; log(paint('• trivy fs', C.cyan)); spawnSync(trivy, ['fs', '--scanners', 'vuln', target], { stdio: 'inherit' }); }
-  if (args.includes('--sbom') && syft) { log(paint('• syft sbom (cyclonedx)', C.cyan)); spawnSync(syft, [target, '-o', 'cyclonedx-json=peonie-sbom.json'], { stdio: 'inherit' }); }
-  if (!ran) die('No scanner found. Install at least one:\n  pip install cve-bin-tool\n  winget install AquaSecurity.Trivy   (or scoop/brew install trivy)\n  (syft/grype from anchore for SBOMs)');
+  if (cvebin) { ran = true; log(paint('running cve-bin-tool', C.cyan)); spawnSync(cvebin, [target], { stdio: 'inherit' }); }
+  if (trivy) { ran = true; log(paint('running trivy fs', C.cyan)); spawnSync(trivy, ['fs', '--scanners', 'vuln', target], { stdio: 'inherit' }); }
+  if (args.includes('--sbom') && syft) { log(paint('writing cyclonedx sbom', C.cyan)); spawnSync(syft, [target, '-o', 'cyclonedx-json=peonie-sbom.json'], { stdio: 'inherit' }); }
+  if (!ran) die('No scanner found. Install at least one:\n  pip install cve-bin-tool\n  winget install AquaSecurity.Trivy\n  (syft/grype from anchore for SBOMs)');
 }
 
 function cmdDoctor() {
@@ -219,17 +197,13 @@ function cmdDoctor() {
   console.log(BANNER);
   for (const [n, p] of rows) {
     const ok = !!p;
-    console.log(`  ${ok ? paint('✓', C.green) : paint('✗', C.red)} ${n.padEnd(14)} ${paint(p || 'not found', ok ? C.dim : C.yellow)}`);
+    console.log(`  ${ok ? paint('ok ', C.green) : paint('-- ', C.red)} ${n.padEnd(14)} ${paint(p || 'not found', ok ? C.dim : C.yellow)}`);
   }
   serverUp().then((up) => {
-    console.log(`  ${up ? paint('✓', C.green) : paint('✗', C.red)} ollama server  ${paint(up ? OLLAMA_HOST : 'down (run: peonie serve)', up ? C.dim : C.yellow)}`);
+    console.log(`  ${up ? paint('ok ', C.green) : paint('-- ', C.red)} ollama server  ${paint(up ? OLLAMA_HOST : 'down (run: peonie serve)', up ? C.dim : C.yellow)}`);
     listLocalModels().then((m) => {
-      console.log('\n  ' + paint('Peonie models:', C.bold));
-      for (const k of Object.keys(MODELS)) {
-        const built = hasModel(m, MODELS[k].tag);
-        console.log(`    ${built ? paint('✓', C.green) : paint('·', C.yellow)} ${k.padEnd(6)} ${MODELS[k].tag.padEnd(14)} ${paint(MODELS[k].blurb, C.dim)}`);
-      }
-      if (!Object.keys(MODELS).some((k) => hasModel(m, MODELS[k].tag))) console.log('\n  ' + paint('Run  peonie setup  to pull bases and build the Peonie models.', C.yellow));
+      const built = hasModel(m, MODEL);
+      console.log(`  ${built ? paint('ok ', C.green) : paint('-- ', C.yellow)} model ${MODEL}   ${paint(built ? 'built (base ' + MODEL_BASE + ')' : 'not built - run: peonie setup', built ? C.dim : C.yellow)}`);
     });
   });
 }
@@ -239,40 +213,27 @@ async function cmdServe() {
   log(paint('Ollama is up on ' + OLLAMA_HOST, C.green));
 }
 
-function cmdModels() {
-  console.log(BANNER);
-  for (const k of Object.keys(MODELS)) {
-    const m = MODELS[k];
-    console.log(`  ${paint(k.padEnd(6), C.pink)} ${paint(m.tag, C.bold)}  ${paint('ctx ' + m.ctx, C.dim)}\n         base: ${paint(m.base, C.dim)}\n         ${m.blurb}\n`);
-  }
-}
-
 function cmdSetup(args) {
-  // Delegates to the platform setup script which pulls bases and builds models.
   const script = IS_WIN ? join(ROOT, 'install.ps1') : join(ROOT, 'install.sh');
-  log(paint('Building Peonie models (pulls bases on first run)…', C.pink));
-  if (IS_WIN) {
-    run('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, 'models', ...args], {});
-  } else {
-    run('bash', [script, 'models', ...args], {});
-  }
+  log(paint('Building the Peonie model (pulls the base on first run)...', C.pink));
+  if (IS_WIN) run('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, 'model', ...args], {});
+  else run('bash', [script, 'model', ...args], {});
 }
 
 function help() {
   console.log(BANNER);
-  console.log(`  ${paint('Usage:', C.bold)} peonie <command> [--model code|cyber|sec] [args…]
+  console.log(`  ${paint('Usage:', C.bold)} peonie <command> [args...]
 
-  ${paint('peonie claude', C.pink)} [args]   Launch Claude Code on a local Peonie model
-  ${paint('peonie codex', C.pink)}  [args]   Launch Codex CLI on a local Peonie model
-  ${paint('peonie cai', C.pink)}    [args]   Launch CAI (Cybersecurity AI) on a local model
+  ${paint('peonie claude', C.pink)} [args]   Launch Claude Code on the Peonie model
+  ${paint('peonie codex', C.pink)}  [args]   Launch Codex CLI on the Peonie model
+  ${paint('peonie cai', C.pink)}    [args]   Launch CAI (Cybersecurity AI) on the Peonie model
   ${paint('peonie scan', C.pink)} <path>     CVE-scan a binary/dir (cve-bin-tool + trivy) [--sbom]
-  ${paint('peonie setup', C.pink)}           Pull model bases and build the Peonie models
-  ${paint('peonie models', C.pink)}          Show the Peonie model catalog
+  ${paint('peonie setup', C.pink)}           Pull the base and build the Peonie model
   ${paint('peonie serve', C.pink)}           Ensure the local Ollama server is running
-  ${paint('peonie doctor', C.pink)}          Check installed tools, server and models
+  ${paint('peonie doctor', C.pink)}          Check installed tools, server and model
 
-  ${paint('Profiles:', C.bold)}  code (default, agentic) · cyber (DeepHat) · sec (Foundation-Sec)
-  ${paint('Example:', C.bold)}   peonie claude --model cyber
+  One unified cyber model. Arguments after the command pass through to the tool.
+  Example:  peonie claude   then ask it to find CVEs and write a PoC.
 `);
 }
 
@@ -285,10 +246,9 @@ const [cmd, ...rest] = process.argv.slice(2);
     case 'cai': return cmdCai(rest);
     case 'scan': return cmdScan(rest);
     case 'setup': return cmdSetup(rest);
-    case 'models': return cmdModels();
     case 'serve': return cmdServe();
     case 'doctor': return cmdDoctor();
-    case '-v': case '--version': return console.log('peonie 0.1.0');
+    case '-v': case '--version': return console.log('peonie 0.2.0');
     case undefined: case '-h': case '--help': case 'help': return help();
     default: die(`unknown command "${cmd}". Run  peonie --help`);
   }

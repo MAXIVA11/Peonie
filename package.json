@@ -1,7 +1,7 @@
 {
   "name": "peonie",
-  "version": "0.1.0",
-  "description": "Peonie — the open-source cyber model. Run Claude Code, Codex and CAI on local, security-tuned open-weight models. No tokens, no credits, no cloud.",
+  "version": "0.2.0",
+  "description": "Peonie, the open-source cyber model. One strong local model for defensive security, driven through Claude Code, Codex, or CAI. Runs on your machine with no tokens or credits.",
   "type": "module",
   "bin": {
     "peonie": "bin/peonie.mjs"
@@ -33,8 +33,8 @@
     "claude-code",
     "codex",
     "cai",
-    "deephat",
-    "foundation-sec",
+    "qwen3-coder",
+    "cyber-defense",
     "cve",
     "sbom",
     "vulnerability-scanner",
