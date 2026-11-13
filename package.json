@@ -1,0 +1,53 @@
+{
+  "name": "peonie",
+  "version": "0.1.0",
+  "description": "Peonie — the open-source cyber model. Run Claude Code, Codex and CAI on local, security-tuned open-weight models. No tokens, no credits, no cloud.",
+  "type": "module",
+  "bin": {
+    "peonie": "bin/peonie.mjs"
+  },
+  "files": [
+    "bin",
+    "models",
+    "prompts",
+    "assets",
+    "install.ps1",
+    "install.sh",
+    "README.md",
+    "LICENSE",
+    "NOTICE.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "keywords": [
+    "cybersecurity",
+    "offensive-security",
+    "pentesting",
+    "llm",
+    "local-llm",
+    "ollama",
+    "claude-code",
+    "codex",
+    "cai",
+    "deephat",
+    "foundation-sec",
+    "cve",
+    "sbom",
+    "vulnerability-scanner",
+    "red-team"
+  ],
+  "author": "MAXIVA11",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MAXIVA11/Peonie.git"
+  },
+  "homepage": "https://github.com/MAXIVA11/Peonie#readme",
+  "bugs": {
+    "url": "https://github.com/MAXIVA11/Peonie/issues"
+  }
+}

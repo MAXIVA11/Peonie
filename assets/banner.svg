@@ -1,0 +1,83 @@
+<svg width="920" height="260" viewBox="0 0 920 260" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Peonie — the open-source cyber model">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#140a22"/>
+      <stop offset="55%" stop-color="#1c0e2e"/>
+      <stop offset="100%" stop-color="#0d0716"/>
+    </linearGradient>
+    <linearGradient id="word" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ff9ec7"/>
+      <stop offset="50%" stop-color="#ffd1e6"/>
+      <stop offset="100%" stop-color="#b57bff"/>
+      <animate attributeName="x1" values="0;0.3;0" dur="6s" repeatCount="indefinite"/>
+      <animate attributeName="x2" values="1;1.3;1" dur="6s" repeatCount="indefinite"/>
+    </linearGradient>
+    <radialGradient id="petal2" cx="50%" cy="38%" r="70%">
+      <stop offset="0%" stop-color="#ffe3f1"/>
+      <stop offset="45%" stop-color="#ff9ec7"/>
+      <stop offset="100%" stop-color="#e5468f"/>
+    </radialGradient>
+    <radialGradient id="core2" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#fff3c4"/>
+      <stop offset="100%" stop-color="#e59a2b"/>
+    </radialGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="920" height="260" rx="18" fill="url(#bg)"/>
+
+  <!-- drifting circuit grid -->
+  <g stroke="#7c3aed" stroke-width="1" opacity="0.18">
+    <path d="M0 60 H920 M0 130 H920 M0 200 H920"/>
+    <path d="M160 0 V260 M320 0 V260 M480 0 V260 M640 0 V260 M800 0 V260"/>
+  </g>
+  <g fill="#ff9ec7">
+    <circle cx="160" cy="60" r="2"><animate attributeName="opacity" values="0.2;1;0.2" dur="3s" repeatCount="indefinite"/></circle>
+    <circle cx="480" cy="200" r="2"><animate attributeName="opacity" values="1;0.2;1" dur="4s" repeatCount="indefinite"/></circle>
+    <circle cx="800" cy="130" r="2"><animate attributeName="opacity" values="0.3;1;0.3" dur="2.4s" repeatCount="indefinite"/></circle>
+    <circle cx="320" cy="130" r="2"><animate attributeName="opacity" values="1;0.3;1" dur="3.6s" repeatCount="indefinite"/></circle>
+  </g>
+
+  <!-- blooming peony -->
+  <g transform="translate(130 130)" filter="url(#glow)">
+    <g fill="url(#petal2)">
+      <g>
+        <ellipse cx="0" cy="-46" rx="22" ry="34"/>
+        <ellipse cx="0" cy="-46" rx="22" ry="34" transform="rotate(60)"/>
+        <ellipse cx="0" cy="-46" rx="22" ry="34" transform="rotate(120)"/>
+        <ellipse cx="0" cy="-46" rx="22" ry="34" transform="rotate(180)"/>
+        <ellipse cx="0" cy="-46" rx="22" ry="34" transform="rotate(240)"/>
+        <ellipse cx="0" cy="-46" rx="22" ry="34" transform="rotate(300)"/>
+        <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="48s" repeatCount="indefinite"/>
+      </g>
+    </g>
+    <g fill="url(#petal2)" opacity="0.95">
+      <g transform="rotate(30)">
+        <ellipse cx="0" cy="-30" rx="17" ry="26"/>
+        <ellipse cx="0" cy="-30" rx="17" ry="26" transform="rotate(72)"/>
+        <ellipse cx="0" cy="-30" rx="17" ry="26" transform="rotate(144)"/>
+        <ellipse cx="0" cy="-30" rx="17" ry="26" transform="rotate(216)"/>
+        <ellipse cx="0" cy="-30" rx="17" ry="26" transform="rotate(288)"/>
+        <animateTransform attributeName="transform" type="rotate" from="30" to="-330" dur="60s" repeatCount="indefinite"/>
+      </g>
+    </g>
+    <circle cx="0" cy="0" r="17" fill="url(#core2)">
+      <animate attributeName="r" values="16;18;16" dur="3.5s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- wordmark -->
+  <text x="235" y="126" font-family="'Segoe UI',Verdana,sans-serif" font-size="68" font-weight="800" fill="url(#word)" letter-spacing="2">PEONIE</text>
+  <text x="238" y="162" font-family="'Consolas','Courier New',monospace" font-size="19" fill="#c9a8ff" letter-spacing="1">the open-source cyber model</text>
+
+  <!-- typing status line -->
+  <g font-family="'Consolas','Courier New',monospace" font-size="15" fill="#8be28b">
+    <text x="238" y="200">$ peonie claude<tspan fill="#5a4a72"> · local · no tokens · no credits</tspan></text>
+  </g>
+  <rect x="238" y="210" width="0" height="2" fill="#ff9ec7">
+    <animate attributeName="width" values="0;300;300;0" keyTimes="0;0.45;0.9;1" dur="5s" repeatCount="indefinite"/>
+  </rect>
+</svg>
