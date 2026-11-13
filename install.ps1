@@ -90,20 +90,20 @@ try { Invoke-WebRequest -UseBasicParsing http://localhost:11434/api/version -Tim
 catch { Start-Process $Ol -ArgumentList "serve" -WindowStyle Hidden; Start-Sleep 4 }
 
 $mf = Join-Path $Root "models\Modelfile"
-$basePresent = @(& $Ol list) -match 'qwen3-coder:30b'
+$basePresent = @(& $Ol list) -match 'llama3.1:8b'
 # Native stderr merged with 2>&1 becomes a terminating error under -EA Stop,
 # so relax the preference just around the build and drive it off $LASTEXITCODE.
 $prevEAP = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
 if ($basePresent) {
-  Info "building peonie from qwen3-coder:30b ..."
+  Info "building peonie from llama3.1:8b ..."
   & $Ol create peonie -f $mf 2>&1 | Out-Null
 } else {
-  Info "downloading the base model (~18 GB). This happens once."
+  Info "downloading the base model (~5 GB). This happens once."
   & $Ol create peonie -f $mf 2>&1 | Where-Object { $_ -match 'pulling|%|success|error' }
 }
 $buildRc = $LASTEXITCODE
 $ErrorActionPreference = $prevEAP
-if ($buildRc -eq 0) { Ok "built (base qwen3-coder:30b)" }
+if ($buildRc -eq 0) { Ok "built (base llama3.1:8b)" }
 else { Warn "build failed (base pull may be incomplete). Re-run: .\install.ps1 model"; exit 1 }
 
 # Done panel (padded by visible width; ANSI codes have zero display width)

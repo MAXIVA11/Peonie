@@ -68,14 +68,14 @@ step "$TOTAL" "$TOTAL" "Model"
 command -v ollama >/dev/null || { warn "Ollama not found; skipping model build."; exit 0; }
 curl -fsS http://localhost:11434/api/version >/dev/null 2>&1 || { (ollama serve >/dev/null 2>&1 &) ; sleep 4; }
 
-if ollama list | grep -q 'qwen3-coder:30b'; then
-  info "building peonie from qwen3-coder:30b ..."
+if ollama list | grep -q 'llama3.1:8b'; then
+  info "building peonie from llama3.1:8b ..."
   ollama create peonie -f "${ROOT}/models/Modelfile" >/dev/null 2>&1
 else
-  info "downloading the base model (~18 GB). This happens once."
+  info "downloading the base model (~5 GB). This happens once."
   ollama create peonie -f "${ROOT}/models/Modelfile"
 fi
-ok "built (base qwen3-coder:30b)"
+ok "built (base llama3.1:8b)"
 
 BORDER="  ${PURP}+$(printf '%0.s-' $(seq 1 52))+${RST}"
 printf '\n%s\n' "$BORDER"

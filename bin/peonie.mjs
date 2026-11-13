@@ -18,8 +18,8 @@ const OLLAMA_HOST = process.env.PEONIE_OLLAMA_HOST || 'http://localhost:11434';
 // One unified model. Peonie is the cyber model; this is the only tag it serves.
 // Override the Ollama tag with PEONIE_MODEL if you build your own.
 const MODEL = process.env.PEONIE_MODEL || 'peonie';
-const MODEL_BASE = 'qwen3-coder:30b';
-const CTX = 32768;
+const MODEL_BASE = 'llama3.1:8b';
+const CTX = 16384;
 
 const C = {
   reset: '\x1b[0m', dim: '\x1b[2m', bold: '\x1b[1m',

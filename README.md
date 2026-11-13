@@ -23,13 +23,13 @@ peonie claude   ->   local Ollama server   ->   peonie (one cyber model)
 
 ## What it is
 
-Peonie is a small launcher plus one Ollama model. The launcher points Claude Code, Codex, or CAI at your local Ollama server and tells them to use the `peonie` model. The model is built on Qwen3-Coder 30B, which is good enough at tool use to actually carry out the work rather than only describe it. A cyber-defense system prompt ships with it, so out of the box it behaves like a security engineer: it inspects, forms a hypothesis, tests it, and reports with evidence.
+Peonie is a small launcher plus one Ollama model. The launcher points Claude Code, Codex, or CAI at your local Ollama server and tells them to use the `peonie` model. The model is built on Llama 3.1 8B, picked because it emits structured tool calls, fits entirely in an 8 GB GPU, and stays fast. A cyber-defense system prompt ships with it, so it behaves like a security engineer: it inspects, forms a hypothesis, and reports with evidence. If you have more VRAM, you can point it at a larger model (see below).
 
 There is a single model on purpose. You run `peonie claude` and get to work. No model picker, no flags to remember.
 
 ## Install
 
-You need [Node.js 18+](https://nodejs.org), a GPU with 6 GB of VRAM or 16 GB of system RAM, and about 20 GB of free disk for the model.
+You need [Node.js 18+](https://nodejs.org), a GPU with 8 GB of VRAM (or 16 GB of system RAM), and about 6 GB of free disk for the model.
 
 Windows (PowerShell):
 
@@ -81,11 +81,11 @@ A normal session looks like this: open `peonie claude` in the repo or build you 
 | | |
 |---|---|
 | Name | `peonie` |
-| Base | Qwen3-Coder 30B (MoE, 3.3B active parameters) |
-| Context | 32K tokens |
+| Base | Llama 3.1 8B (fits an 8 GB GPU, structured tool calls) |
+| Context | 16K tokens (sized to stay on the GPU) |
 | Served by | [Ollama](https://ollama.com), locally |
 
-The system prompt is in [`prompts/peonie-system.md`](./prompts/peonie-system.md) and the build recipe is in [`models/Modelfile`](./models/Modelfile). If you want a different base, edit the Modelfile and run `peonie setup` again, or point `PEONIE_MODEL` at any Ollama model you already have.
+The system prompt is in [`prompts/peonie-system.md`](./prompts/peonie-system.md) and the build recipe is in [`models/Modelfile`](./models/Modelfile). To trade speed for depth, change the `FROM` line to `qwen2.5-coder:14b` or `qwen3-coder:30b` and run `peonie setup` again, or point `PEONIE_MODEL` at any Ollama model you already have.
 
 ## CVE scanning
 
@@ -100,9 +100,13 @@ Install the scanners once (`pip install cve-bin-tool`, `trivy` from your package
 
 ## What it is good at, and where it is not
 
-A 30B model that runs on a laptop GPU is strong, but it is not a frontier hosted model. It handles routine auditing, PoC writing, and CVE triage well. On the hardest reverse engineering or the most subtle logic bugs it will miss things a larger model would catch. Use it for volume, privacy, and offline work, and bring in a bigger model when you are stuck.
+The default 8B is picked for speed on an 8 GB GPU. An 8B is a solid assistant for reading code, triaging known issues, mapping CVE and CWE, and writing PoCs. It will not independently discover new vulnerabilities in large third-party software the way a frontier model might. Treat it as a fast local helper, and bring in a bigger model or a hosted one for the hardest analysis.
 
-Two more things worth saying plainly. Speed depends on your hardware: on 8 GB of VRAM the model offloads part of itself to the CPU and runs slower, though it still works. And the scanners find known CVEs in third-party components, not new bugs in your own code, so pair them with the model and with fuzzing for real coverage.
+Tool use is the fiddly part. The model emits structured tool calls, and they work through the OpenAI-compatible path that Codex and CAI use. Claude Code talks to Ollama's Anthropic-compatible endpoint, where tool execution with local models is less reliable: the model may describe a tool instead of running it. For autonomous, tool-running work, `peonie cai` is the most dependable path today. A router such as [claude-code-router](https://github.com/musistudio/claude-code-router) in front of Claude Code also fixes it.
+
+You can move the quality slider. Point the Modelfile at `qwen3-coder:30b` for stronger code reasoning and structured tools, at the cost of speed on an 8 GB GPU. For a larger context window, raise `num_ctx` (Llama 3.1 supports up to 128K) if you have the VRAM.
+
+The scanners find known CVEs in third-party components, not new bugs in your own code, so pair them with the model and with fuzzing for real coverage.
 
 Run Peonie only against systems you own or are authorized to test.
 
