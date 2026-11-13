@@ -112,30 +112,54 @@ function runCcr(ccr, args, env) {
 const CCR_CONFIG_DIR = join(homedir(), '.claude-code-router');
 const CCR_CONFIG = join(CCR_CONFIG_DIR, 'config.json');
 
-// Write a router config that points at the local peonie model, but never
-// clobber a config the user already has.
-function ensureCcrConfig() {
-  if (existsSync(CCR_CONFIG)) return false;
-  const cfg = {
-    LOG: false,
-    Providers: [
-      {
-        name: 'peonie',
-        api_base_url: OLLAMA_HOST + '/v1/chat/completions',
-        api_key: 'ollama',
-        models: [MODEL],
-      },
-    ],
-    Router: { default: `peonie,${MODEL}` },
+// The peonie provider for the router. The reasoning transformer with
+// enable:false stops Claude Code's "thinking" from reaching the local model,
+// which otherwise 400s because it does not support it.
+function peonieProvider() {
+  return {
+    name: 'peonie',
+    api_base_url: OLLAMA_HOST + '/v1/chat/completions',
+    api_key: 'ollama',
+    models: [MODEL],
+    // The cerebras transformer strips the reasoning/thinking fields that Claude
+    // Code sends and local Ollama models reject with "does not support thinking".
+    transformer: { use: ['cerebras'] },
   };
+}
+
+// Ensure the router config points at the peonie model with the thinking-stripping
+// transformer. Creates the config or updates our own provider in place, but never
+// touches a config that is clearly the user's own. Returns true if it changed.
+function ensureCcrConfig() {
+  const want = peonieProvider();
   try {
-    mkdirSync(CCR_CONFIG_DIR, { recursive: true });
-    writeFileSync(CCR_CONFIG, JSON.stringify(cfg, null, 2));
-    return true;
+    if (!existsSync(CCR_CONFIG)) {
+      mkdirSync(CCR_CONFIG_DIR, { recursive: true });
+      writeFileSync(CCR_CONFIG, JSON.stringify({ LOG: false, Providers: [want], Router: { default: `peonie,${MODEL}` } }, null, 2));
+      return true;
+    }
+    const cfg = JSON.parse(readFileSync(CCR_CONFIG, 'utf8'));
+    let changed = false;
+    cfg.Providers = cfg.Providers || [];
+    const prov = cfg.Providers.find((p) => p && p.name === 'peonie');
+    if (!prov) return false; // respect a user's own config
+    if (JSON.stringify(prov) !== JSON.stringify(want)) { Object.assign(prov, want); changed = true; }
+    cfg.Router = cfg.Router || {};
+    if (cfg.Router.default !== `peonie,${MODEL}`) { cfg.Router.default = `peonie,${MODEL}`; changed = true; }
+    if (changed) writeFileSync(CCR_CONFIG, JSON.stringify(cfg, null, 2));
+    return changed;
   } catch (e) {
     log(paint('could not write router config: ' + e.message, C.yellow));
     return false;
   }
+}
+
+function ccrStop(ccr) {
+  try {
+    let bin = ccr, argv = ['stop'];
+    if (IS_WIN && /\.cmd$/i.test(ccr)) { bin = process.env.ComSpec || 'cmd.exe'; argv = ['/c', ccr, 'stop']; }
+    spawnSync(bin, argv, { stdio: 'ignore' });
+  } catch { /* ignore */ }
 }
 
 function httpGet(url, timeoutMs = 2500) {
@@ -198,9 +222,14 @@ async function cmdClaude(args) {
   const foundCcr = process.env.PEONIE_NO_ROUTER ? null : ccrBin();
   if (foundCcr && ccrUsable(foundCcr)) {
     const wrote = ensureCcrConfig();
-    if (wrote) log(paint(`wrote router config -> ${CCR_CONFIG}`, C.dim));
+    if (wrote) {
+      log(paint(`updated router config -> ${CCR_CONFIG}`, C.dim));
+      ccrStop(foundCcr); // make the service reload the new config
+    }
     log(paint(`Peonie on Claude Code via router . model ${MODEL}`, C.pink));
-    runCcr(foundCcr, args, {});
+    // Local models like Llama 3.1 don't support "thinking"; Claude Code would
+    // otherwise request it and the provider 400s. Turn it off.
+    runCcr(foundCcr, args, { MAX_THINKING_TOKENS: '0', DISABLE_INTERLEAVED_THINKING: '1' });
     return;
   }
 
