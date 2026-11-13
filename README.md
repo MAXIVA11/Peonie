@@ -73,6 +73,7 @@ A normal session looks like this: open `peonie claude` in the repo or build you 
 | `peonie cai [args]` | Launch CAI on the Peonie model |
 | `peonie scan <path>` | CVE-scan a binary or directory (`cve-bin-tool` + `trivy`), add `--sbom` for CycloneDX |
 | `peonie setup` | Pull the base and build the Peonie model |
+| `peonie update` | Pull the latest code and rebuild the model |
 | `peonie router` | Set up or check the router that lets `peonie claude` run tools |
 | `peonie serve` | Start the local Ollama server |
 | `peonie doctor` | Check tools, server, and model |

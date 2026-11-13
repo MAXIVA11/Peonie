@@ -350,6 +350,27 @@ function cmdRouter() {
   }
 }
 
+async function cmdUpdate() {
+  console.log(BANNER);
+  const git = findExe('git', []);
+  if (!git) die('git not found; install git to use peonie update.');
+  log(paint('pulling the latest Peonie...', C.pink));
+  const pull = spawnSync(git, ['-C', ROOT, 'pull', '--ff-only'], { stdio: 'inherit' });
+  if (pull.status !== 0) {
+    log(paint('git pull did not complete (local changes or no network). Fix and re-run.', C.yellow));
+    return;
+  }
+  await ensureServer();
+  const ol = ollamaBin();
+  if (ol) {
+    log(paint('rebuilding the peonie model...', C.pink));
+    const build = spawnSync(ol, ['create', 'peonie', '-f', join(ROOT, 'models', 'Modelfile')], { stdio: 'inherit' });
+    if (build.status === 0) log(paint('model rebuilt.', C.green));
+    else log(paint('model rebuild failed; run: peonie setup', C.yellow));
+  }
+  log(paint('Peonie is up to date. Check it with:  peonie doctor', C.green));
+}
+
 function cmdSetup(args) {
   const script = IS_WIN ? join(ROOT, 'install.ps1') : join(ROOT, 'install.sh');
   log(paint('Building the Peonie model (pulls the base on first run)...', C.pink));
@@ -366,6 +387,7 @@ function help() {
   ${paint('peonie cai', C.pink)}    [args]   Launch CAI (Cybersecurity AI) on the Peonie model
   ${paint('peonie scan', C.pink)} <path>     CVE-scan a binary/dir (cve-bin-tool + trivy) [--sbom]
   ${paint('peonie setup', C.pink)}           Pull the base and build the Peonie model
+  ${paint('peonie update', C.pink)}          Pull the latest code and rebuild the model
   ${paint('peonie router', C.pink)}          Set up / check the router that makes claude run tools
   ${paint('peonie serve', C.pink)}           Ensure the local Ollama server is running
   ${paint('peonie doctor', C.pink)}          Check installed tools, server and model
@@ -384,6 +406,7 @@ const [cmd, ...rest] = process.argv.slice(2);
     case 'cai': return cmdCai(rest);
     case 'scan': return cmdScan(rest);
     case 'setup': return cmdSetup(rest);
+    case 'update': return cmdUpdate();
     case 'router': return cmdRouter();
     case 'serve': return cmdServe();
     case 'doctor': return cmdDoctor();
