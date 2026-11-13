@@ -5,7 +5,10 @@
 #   .\install.ps1 model      # (re)build the Peonie model only
 param([string]$Mode = "all")
 $ErrorActionPreference = "Stop"
-$Pink = "`e[38;5;211m"; $Dim = "`e[2m"; $Rst = "`e[0m"; $Grn = "`e[32m"; $Ylw = "`e[33m"
+# [char]27 (ESC) works in both Windows PowerShell 5.1 and PowerShell 7.
+# The `e escape only exists in 7, so 5.1 would print a literal "e[..m".
+$ESC = [char]27
+$Pink = "$ESC[38;5;211m"; $Dim = "$ESC[2m"; $Rst = "$ESC[0m"; $Grn = "$ESC[32m"; $Ylw = "$ESC[33m"
 function Say($m) { Write-Host "$Pink peonie $Rst $m" }
 
 # Resolve the repo root (folder that holds bin/ and models/)
