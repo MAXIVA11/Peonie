@@ -104,6 +104,8 @@ Install the scanners once (`pip install cve-bin-tool`, `trivy` from your package
 
 The default 8B is picked for speed on an 8 GB GPU. An 8B is a solid assistant for reading code, triaging known issues, mapping CVE and CWE, and writing PoCs. It will not independently discover new vulnerabilities in large third-party software the way a frontier model might. Treat it as a fast local helper, and bring in a bigger model or a hosted one for the hardest analysis.
 
+`peonie claude` injects an authorized-security system prompt so the model does the work instead of refusing. It is for targets you own or are authorized to test. An 8B also follows instructions literally, so be explicit: "read net.py in full and analyze each function" gets a real audit, while a vague "audit this" may make it do a shallow search and miss things.
+
 Tool use is the fiddly part. The model emits structured tool calls, but Claude Code reaches Ollama through its Anthropic endpoint, where those calls are not run reliably: the model may describe a tool instead of executing it. Peonie fixes this with a router. Install the classic claude-code-router once:
 
 ```bash
