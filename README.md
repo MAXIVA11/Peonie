@@ -73,6 +73,7 @@ A normal session looks like this: open `peonie claude` in the repo or build you 
 | `peonie cai [args]` | Launch CAI on the Peonie model |
 | `peonie scan <path>` | CVE-scan a binary or directory (`cve-bin-tool` + `trivy`), add `--sbom` for CycloneDX |
 | `peonie setup` | Pull the base and build the Peonie model |
+| `peonie router` | Set up or check the router that lets `peonie claude` run tools |
 | `peonie serve` | Start the local Ollama server |
 | `peonie doctor` | Check tools, server, and model |
 
@@ -102,7 +103,13 @@ Install the scanners once (`pip install cve-bin-tool`, `trivy` from your package
 
 The default 8B is picked for speed on an 8 GB GPU. An 8B is a solid assistant for reading code, triaging known issues, mapping CVE and CWE, and writing PoCs. It will not independently discover new vulnerabilities in large third-party software the way a frontier model might. Treat it as a fast local helper, and bring in a bigger model or a hosted one for the hardest analysis.
 
-Tool use is the fiddly part. The model emits structured tool calls, and they work through the OpenAI-compatible path that Codex and CAI use. Claude Code talks to Ollama's Anthropic-compatible endpoint, where tool execution with local models is less reliable: the model may describe a tool instead of running it. For autonomous, tool-running work, `peonie cai` is the most dependable path today. A router such as [claude-code-router](https://github.com/musistudio/claude-code-router) in front of Claude Code also fixes it.
+Tool use is the fiddly part. The model emits structured tool calls, but Claude Code reaches Ollama through its Anthropic endpoint, where those calls are not run reliably: the model may describe a tool instead of executing it. Peonie fixes this with a router. Install the classic claude-code-router once:
+
+```bash
+npm install -g @musistudio/claude-code-router@1
+```
+
+Then `peonie claude` detects it, writes its config, and routes through it so tools run. Run `peonie router` to check the status. The newer 3.x router has a different UI and profile design that Peonie does not drive, so install the `@1` line above. `peonie codex` and `peonie cai` use the OpenAI path and run tools without a router.
 
 You can move the quality slider. Point the Modelfile at `qwen3-coder:30b` for stronger code reasoning and structured tools, at the cost of speed on an 8 GB GPU. For a larger context window, raise `num_ctx` (Llama 3.1 supports up to 128K) if you have the VRAM.
 

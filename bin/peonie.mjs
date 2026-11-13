@@ -3,7 +3,7 @@
 // Runs Claude Code / Codex / CAI on a single local, security-tuned model
 // served by Ollama. No tokens, no credits, no cloud.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { homedir, platform } from 'node:os';
@@ -73,6 +73,71 @@ function codexBin() {
   return findExe('codex', [join(homedir(), '.local', 'bin', IS_WIN ? 'codex.exe' : 'codex')]);
 }
 
+// claude-code-router: routes Claude Code through Ollama's OpenAI-compatible
+// endpoint, where local models emit structured tool calls that actually run.
+function ccrBin() {
+  const npmBin = join(homedir(), 'AppData', 'Roaming', 'npm');
+  // Prefer the .cmd shim on Windows so it can actually be launched.
+  if (IS_WIN) { const c = join(npmBin, 'ccr.cmd'); if (existsSync(c)) return c; }
+  return findExe('ccr', [
+    join(npmBin, IS_WIN ? 'ccr.cmd' : 'ccr'),
+    '/usr/local/bin/ccr', join(homedir(), '.local', 'bin', 'ccr'),
+  ]);
+}
+
+// Peonie targets the classic claude-code-router (the `ccr code` + config.json
+// design). Version 3.x replaced that with a web UI, SQLite config and named
+// profiles, which this simple integration does not drive. Detect the classic
+// one by its help text so Peonie never launches an incompatible ccr.
+function ccrUsable(ccr) {
+  try {
+    let bin = ccr, argv = ['--help'];
+    if (IS_WIN && /\.cmd$/i.test(ccr)) { bin = process.env.ComSpec || 'cmd.exe'; argv = ['/c', ccr, '--help']; }
+    const r = spawnSync(bin, argv, { encoding: 'utf8' });
+    const out = (r.stdout || '') + (r.stderr || '');
+    return /\bcode\b/.test(out) && !/profile-name-or-id/i.test(out);
+  } catch { return false; }
+}
+
+// Launch `ccr code <args>`. A .cmd shim on Windows must go through cmd.exe,
+// but with an explicit argv (not shell:true) so prompts keep their quoting.
+function runCcr(ccr, args, env) {
+  let bin = ccr, argv = ['code', ...args];
+  if (IS_WIN && /\.cmd$/i.test(ccr)) { bin = process.env.ComSpec || 'cmd.exe'; argv = ['/c', ccr, 'code', ...args]; }
+  const child = spawn(bin, argv, { stdio: 'inherit', env: { ...process.env, ...env }, shell: false });
+  child.on('exit', (code) => process.exit(code ?? 0));
+  child.on('error', (e) => die('failed to launch router: ' + e.message));
+}
+
+const CCR_CONFIG_DIR = join(homedir(), '.claude-code-router');
+const CCR_CONFIG = join(CCR_CONFIG_DIR, 'config.json');
+
+// Write a router config that points at the local peonie model, but never
+// clobber a config the user already has.
+function ensureCcrConfig() {
+  if (existsSync(CCR_CONFIG)) return false;
+  const cfg = {
+    LOG: false,
+    Providers: [
+      {
+        name: 'peonie',
+        api_base_url: OLLAMA_HOST + '/v1/chat/completions',
+        api_key: 'ollama',
+        models: [MODEL],
+      },
+    ],
+    Router: { default: `peonie,${MODEL}` },
+  };
+  try {
+    mkdirSync(CCR_CONFIG_DIR, { recursive: true });
+    writeFileSync(CCR_CONFIG, JSON.stringify(cfg, null, 2));
+    return true;
+  } catch (e) {
+    log(paint('could not write router config: ' + e.message, C.yellow));
+    return false;
+  }
+}
+
 function httpGet(url, timeoutMs = 2500) {
   return new Promise((resolve) => {
     const req = http.get(url, (res) => {
@@ -127,6 +192,27 @@ async function cmdClaude(args) {
   if (!claude) die('Claude Code is not installed.\n  irm https://claude.ai/install.ps1 | iex   (Windows)\n  curl -fsSL https://claude.ai/install.sh | bash   (Linux/macOS)');
   await ensureServer();
   await warnIfUnbuilt();
+
+  // Preferred path: route through the classic claude-code-router so tool
+  // calls execute. Only use it when the compatible version is installed.
+  const foundCcr = process.env.PEONIE_NO_ROUTER ? null : ccrBin();
+  if (foundCcr && ccrUsable(foundCcr)) {
+    const wrote = ensureCcrConfig();
+    if (wrote) log(paint(`wrote router config -> ${CCR_CONFIG}`, C.dim));
+    log(paint(`Peonie on Claude Code via router . model ${MODEL}`, C.pink));
+    runCcr(foundCcr, args, {});
+    return;
+  }
+
+  // Fallback: talk to Ollama's Anthropic endpoint directly. Chat works, but
+  // tool execution with local models is unreliable here.
+  if (foundCcr) {
+    log(paint('Found ccr, but it is the 3.x UI/profile build, which Peonie does not drive.', C.yellow));
+    log(paint('Install the classic router instead:', C.yellow));
+  } else {
+    log(paint('Router (ccr) not found. Tool execution may be unreliable. Install once:', C.yellow));
+  }
+  log(paint('  npm install -g @musistudio/claude-code-router@1', C.cyan));
   const env = {
     ANTHROPIC_BASE_URL: OLLAMA_HOST,
     ANTHROPIC_AUTH_TOKEN: 'peonie',
@@ -187,6 +273,7 @@ function cmdDoctor() {
   const rows = [
     ['ollama', ollamaBin()],
     ['claude', claudeBin()],
+    ['router (ccr)', ccrBin()],
     ['codex', codexBin()],
     ['cai', findExe('cai', [])],
     ['trivy', findExe('trivy', [])],
@@ -213,6 +300,27 @@ async function cmdServe() {
   log(paint('Ollama is up on ' + OLLAMA_HOST, C.green));
 }
 
+function cmdRouter() {
+  console.log(BANNER);
+  const ccr = ccrBin();
+  if (ccr && ccrUsable(ccr)) {
+    console.log(`  ${paint('ok', C.green)}  router installed (classic): ${paint(ccr, C.dim)}`);
+    console.log(`  config: ${paint(CCR_CONFIG, C.dim)} ${existsSync(CCR_CONFIG) ? paint('(written)', C.green) : paint('(created on first run)', C.dim)}`);
+    console.log(`\n  ${paint('peonie claude', C.pink)} routes through it, so tool calls execute.`);
+  } else if (ccr) {
+    console.log(`  ${paint('!', C.yellow)}  found ccr 3.x (UI/profile build): ${paint(ccr, C.dim)}`);
+    console.log(`  Peonie drives the classic router. Replace it with:\n`);
+    console.log(`    ${paint('npm install -g @musistudio/claude-code-router@1', C.cyan)}\n`);
+    console.log(`  Then ${paint('peonie claude', C.pink)} picks it up automatically.`);
+  } else {
+    console.log(`  ${paint('The router makes Claude Code run tools with the local model.', C.bold)}`);
+    console.log(`  Install it once:\n`);
+    console.log(`    ${paint('npm install -g @musistudio/claude-code-router@1', C.cyan)}\n`);
+    console.log(`  Then ${paint('peonie claude', C.pink)} picks it up automatically.`);
+    console.log(`  ${paint('peonie codex', C.pink)} and ${paint('peonie cai', C.pink)} already run tools without it.`);
+  }
+}
+
 function cmdSetup(args) {
   const script = IS_WIN ? join(ROOT, 'install.ps1') : join(ROOT, 'install.sh');
   log(paint('Building the Peonie model (pulls the base on first run)...', C.pink));
@@ -229,6 +337,7 @@ function help() {
   ${paint('peonie cai', C.pink)}    [args]   Launch CAI (Cybersecurity AI) on the Peonie model
   ${paint('peonie scan', C.pink)} <path>     CVE-scan a binary/dir (cve-bin-tool + trivy) [--sbom]
   ${paint('peonie setup', C.pink)}           Pull the base and build the Peonie model
+  ${paint('peonie router', C.pink)}          Set up / check the router that makes claude run tools
   ${paint('peonie serve', C.pink)}           Ensure the local Ollama server is running
   ${paint('peonie doctor', C.pink)}          Check installed tools, server and model
 
@@ -246,6 +355,7 @@ const [cmd, ...rest] = process.argv.slice(2);
     case 'cai': return cmdCai(rest);
     case 'scan': return cmdScan(rest);
     case 'setup': return cmdSetup(rest);
+    case 'router': return cmdRouter();
     case 'serve': return cmdServe();
     case 'doctor': return cmdDoctor();
     case '-v': case '--version': return console.log('peonie 0.2.0');
